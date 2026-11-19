@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import type { ActivityEvent, Build, Project } from "@apppilot/contracts";
+import type { ActivityEvent, AgentTask, Build } from "@apppilot/contracts";
 import {
   ArrowRight,
   ArrowUp,
@@ -14,7 +14,6 @@ import {
   FolderPlus,
   Hammer,
   Package,
-  Plus,
   Sparkles,
   TestTube2,
   XCircle,
@@ -25,8 +24,7 @@ import { EmptyState, ErrorState, QueryView } from "@/components/states/states";
 import { AgentStatusBadge, BuildStatusBadge } from "@/components/status/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, Skeleton } from "@/components/ui/primitives";
-import { ProjectTechBadges } from "@/features/projects/project-meta";
-import { ProjectPreview } from "@/features/projects/project-preview";
+import { NewProjectCard, PROJECT_CARD_SKELETON, ProjectCard } from "@/features/projects/project-card";
 import { useActivity, useAgentTasks, useBuilds, useProjects, useSession, useUsage } from "@/lib/api/hooks";
 import { cn, formatBytes, formatDuration, formatNumber, formatRelative } from "@/lib/utils";
 
@@ -224,56 +222,13 @@ function Stat({
 /* Project gallery                                                     */
 /* ------------------------------------------------------------------ */
 
-function ProjectTile({ project, index }: { project: Project; index: number }) {
-  return (
-    <Link
-      href={`/projects/${project.id}/ide`}
-      style={{ "--i": index } as React.CSSProperties}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-pop"
-    >
-      <ProjectPreview project={project} />
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="truncate font-display text-[17px] font-semibold tracking-tight">{project.name}</h3>
-          {project.activeTaskCount > 0 ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ai-soft px-2 py-0.5 text-[12px] font-medium text-ai">
-              <span className="size-1.5 animate-glow rounded-full bg-ai" aria-hidden />
-              {project.activeTaskCount} running
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 line-clamp-2 min-h-10 text-[13.5px] leading-relaxed text-muted-foreground">{project.description}</p>
-        <div className="mt-3">
-          <ProjectTechBadges project={project} />
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted-foreground">
-          <span>Edited {formatRelative(project.updatedAt)}</span>
-          {project.lastBuild ? <BuildStatusBadge status={project.lastBuild.status} /> : <span>No builds</span>}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function NewProjectTile({ index }: { index: number }) {
-  return (
-    <Link
-      href="/projects/new"
-      style={{ "--i": index } as React.CSSProperties}
-      className="group flex min-h-[18rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border-strong bg-surface/40 p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:border-primary/60 hover:bg-primary-soft"
-    >
-      <span className="grid size-12 place-items-center rounded-2xl bg-brand text-white shadow-[0_10px_26px_-10px_var(--brand-glow)] transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110">
-        <Plus className="size-6" aria-hidden />
-      </span>
-      <span className="font-display text-[17px] font-semibold tracking-tight">New project</span>
-      <span className="max-w-[14rem] text-[13px] text-muted-foreground">Start from a prompt, a ZIP or an APK.</span>
-    </Link>
-  );
-}
-
 function RecentProjects() {
   const projects = useProjects();
   const items = [...(projects.data?.items ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3);
+  // Same query as "Agent tasks running" below (shared cache), used for each card's status.
+  const activeTasks = useAgentTasks({ status: "active" });
+  const taskByProject = new Map<string, AgentTask>();
+  for (const t of activeTasks.data ?? []) if (!taskByProject.has(t.projectId)) taskByProject.set(t.projectId, t);
   return (
     <section aria-labelledby="recent-projects" className="mt-12">
       <div className="mb-4 flex items-end justify-between gap-3">
@@ -291,7 +246,7 @@ function RecentProjects() {
       {projects.isPending ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading projects">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[18rem] rounded-2xl" />
+            <Skeleton key={i} className={PROJECT_CARD_SKELETON} />
           ))}
         </div>
       ) : projects.isError ? (
@@ -317,9 +272,9 @@ function RecentProjects() {
       ) : (
         <div className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {items.map((p, i) => (
-            <ProjectTile key={p.id} project={p} index={i} />
+            <ProjectCard key={p.id} project={p} task={taskByProject.get(p.id)} index={i} />
           ))}
-          <NewProjectTile index={items.length} />
+          <NewProjectCard index={items.length} />
         </div>
       )}
     </section>

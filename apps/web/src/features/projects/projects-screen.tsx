@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Project } from "@apppilot/contracts";
+import type { AgentTask, Project } from "@apppilot/contracts";
 import {
-  Bot,
   Code2,
   FileArchive,
   Hammer,
@@ -38,11 +37,12 @@ import {
 } from "@/components/ui/overlays";
 import { Badge, Card, Input, Skeleton, Table, TBody, TD, TH, THead, TR } from "@/components/ui/primitives";
 import { errorMessage } from "@/lib/api/errors";
-import { useDeleteProject, useProjects } from "@/lib/api/hooks";
+import { useAgentTasks, useDeleteProject, useProjects } from "@/lib/api/hooks";
 import { cn, formatBytes, formatRelative } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { ProjectTechBadges } from "./project-meta";
-import { ProjectPreview, ProjectThumb } from "./project-preview";
+import { NewProjectCard, PROJECT_CARD_SKELETON, ProjectCard } from "./project-card";
+import { ProjectThumb } from "./project-preview";
 
 type SourceFilter = "all" | Project["source"];
 type Sort = "updated" | "name" | "created";
@@ -84,58 +84,6 @@ function ProjectActions({ project, onDelete, className }: { project: Project; on
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function ProjectCard({ project, index, onDelete }: { project: Project; index: number; onDelete: () => void }) {
-  return (
-    <article
-      style={{ "--i": index } as React.CSSProperties}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-pop"
-    >
-      <div className="relative">
-        <ProjectPreview project={project} />
-        <div className="absolute right-2.5 top-2.5 z-10">
-          <ProjectActions project={project} onDelete={onDelete} className="bg-background/60 text-foreground backdrop-blur hover:bg-background/90" />
-        </div>
-        {project.activeTaskCount > 0 ? (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 text-[12px] font-medium text-ai backdrop-blur">
-            <span className="size-1.5 animate-glow rounded-full bg-ai" aria-hidden />
-            <Bot className="size-3.5" aria-hidden /> {project.activeTaskCount} running
-          </span>
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col p-4">
-        <Link href={`/projects/${project.id}/ide`} className="min-w-0 after:absolute after:inset-0 after:z-0">
-          <h3 className="truncate font-display text-[18px] font-semibold tracking-tight">{project.name}</h3>
-          <p className="truncate font-mono text-[12.5px] text-muted-foreground">{project.packageName ?? "—"}</p>
-        </Link>
-        <p className="mt-2.5 line-clamp-2 min-h-10 text-[13.5px] leading-relaxed text-muted-foreground">{project.description}</p>
-        <div className="mt-3">
-          <ProjectTechBadges project={project} />
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted-foreground">
-          <span>Updated {formatRelative(project.updatedAt)}</span>
-          {project.lastBuild ? <BuildStatusBadge status={project.lastBuild.status} /> : <span>No builds</span>}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function NewProjectCard({ index }: { index: number }) {
-  return (
-    <Link
-      href="/projects/new"
-      style={{ "--i": index } as React.CSSProperties}
-      className="group flex min-h-[18rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border-strong bg-surface/40 p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:border-primary/60 hover:bg-primary-soft"
-    >
-      <span className="grid size-12 place-items-center rounded-2xl bg-brand text-white shadow-[0_10px_26px_-10px_var(--brand-glow)] transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110">
-        <Plus className="size-6" aria-hidden />
-      </span>
-      <span className="font-display text-[17px] font-semibold tracking-tight">New project</span>
-      <span className="max-w-[14rem] text-[13px] text-muted-foreground">Start from a prompt, a ZIP or an APK.</span>
-    </Link>
   );
 }
 
@@ -198,7 +146,7 @@ function GridSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading projects">
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <Skeleton key={i} className="h-[22rem] rounded-2xl" style={{ opacity: 1 - i * 0.1 }} />
+        <Skeleton key={i} className={PROJECT_CARD_SKELETON} style={{ opacity: 1 - i * 0.1 }} />
       ))}
     </div>
   );
@@ -230,6 +178,13 @@ export function ProjectsScreen() {
 
   const countFor = (s: SourceFilter) => (s === "all" ? all.length : all.filter((p) => p.source === s).length);
   const running = all.reduce((n, p) => n + p.activeTaskCount, 0);
+  // The live step label on each card comes from the active agent tasks (same query as the dashboard).
+  const activeTasks = useAgentTasks({ status: "active" }, { enabled: running > 0 });
+  const taskByProject = useMemo(() => {
+    const m = new Map<string, AgentTask>();
+    for (const t of activeTasks.data ?? []) if (!m.has(t.projectId)) m.set(t.projectId, t);
+    return m;
+  }, [activeTasks.data]);
   const filtering = q.trim() !== "" || source !== "all";
 
   return (
@@ -373,7 +328,13 @@ export function ProjectsScreen() {
       ) : view === "grid" ? (
         <div className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((p, i) => (
-            <ProjectCard key={p.id} project={p} index={i} onDelete={() => setToDelete(p)} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              task={taskByProject.get(p.id)}
+              index={i}
+              actions={<ProjectActions project={p} onDelete={() => setToDelete(p)} className="text-muted-foreground hover:text-foreground" />}
+            />
           ))}
           {!filtering ? <NewProjectCard index={filtered.length} /> : null}
         </div>
