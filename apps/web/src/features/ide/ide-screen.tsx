@@ -38,6 +38,8 @@ import { AssistantPanel } from "./assistant-panel";
 import { BottomPanel } from "./bottom-panel";
 import { EditorArea } from "./editor-area";
 import { FileExplorer, type FileExplorerHandle } from "./file-explorer";
+import { PreviewWorkspace } from "./preview-workspace";
+import { ViewToggle } from "./view-toggle";
 import { LANGUAGE_LABEL, languageForPath } from "./monaco-setup";
 import { isMod, MOD, SHORTCUTS } from "./shortcuts";
 
@@ -197,6 +199,8 @@ export function IdeScreen({ projectId }: { projectId: string }) {
   const tree = useFileTree(projectId);
   const layout = useIdeStore((s) => s.layout);
   const toggle = useIdeStore((s) => s.togglePanel);
+  const view = useIdeStore((s) => s.view);
+  const setView = useIdeStore((s) => s.setView);
   const setBottomTab = useIdeStore((s) => s.setBottomTab);
   const openFile = useIdeStore((s) => s.openFile);
   const closeTab = useIdeStore((s) => s.closeTab);
@@ -209,8 +213,17 @@ export function IdeScreen({ projectId }: { projectId: string }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const readOnly = project.data?.isApkAnalysis;
+  const readOnlyRef = useRef(readOnly);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
 
   const aiModifiedPaths = useMemo(() => new Set(flatten(tree.data ?? []).filter((f) => f.aiModified).map((f) => f.path)), [tree.data]);
+
+  // Every project opens on Code, never on Preview.
+  useEffect(() => {
+    setView("code");
+  }, [projectId, setView]);
 
   // Deep links: ?open=path&line=n (from build errors), ?assistant=intent.
   const handledLink = useRef(false);
@@ -242,6 +255,13 @@ export function IdeScreen({ projectId }: { projectId: string }) {
       const mod = isMod(e);
       const k = e.key.toLowerCase();
       if (mod && e.altKey && k === "b") { e.preventDefault(); toggle("assistant"); return; }
+      if (mod && e.altKey && k === "p") {
+        e.preventDefault();
+        const s = useIdeStore.getState();
+        if (s.view === "preview") s.setView("code");
+        else if (!readOnlyRef.current) s.setView("preview");
+        return;
+      }
       if (mod && !e.shiftKey && k === "b") { e.preventDefault(); toggle("explorer"); return; }
       if (mod && k === "j") { e.preventDefault(); toggle("bottom"); return; }
       if (mod && !e.shiftKey && k === "p") { e.preventDefault(); setQuickOpen(true); return; }
@@ -274,6 +294,10 @@ export function IdeScreen({ projectId }: { projectId: string }) {
         qc.invalidateQueries({ queryKey: ["agent", "tasks"] });
       } else if (ev.type === "build.updated") {
         qc.invalidateQueries({ queryKey: ["builds"] });
+        // A finished build may make a blocked preview possible. Never replace a session that is already running.
+        if (qc.getQueryState(qk.previewSession(projectId))?.status === "error") {
+          qc.invalidateQueries({ queryKey: qk.previewSession(projectId) });
+        }
         qc.invalidateQueries({ queryKey: qk.diagnostics(projectId) });
       } else if (ev.type === "diagnostics.updated") {
         qc.invalidateQueries({ queryKey: qk.diagnostics(projectId) });
@@ -321,6 +345,11 @@ export function IdeScreen({ projectId }: { projectId: string }) {
             </Link>
           ))}
         </nav>
+        <ViewToggle
+          value={view}
+          onChange={setView}
+          previewDisabledReason={readOnly ? "Preview isn't available for APK analyses (decompiled, read-only)" : undefined}
+        />
         <div className="ml-auto flex items-center gap-1">
           {!readOnly ? (
             <Button
@@ -373,6 +402,16 @@ export function IdeScreen({ projectId }: { projectId: string }) {
           </>
         ) : null}
         <Panel id="center" order={2} minSize={30}>
+          <div className="relative size-full">
+          {/* The editor stays mounted (just hidden) while previewing, so tabs, unsaved buffers and cursor survive. */}
+          <div
+            id="view-panel-code"
+            role="tabpanel"
+            aria-labelledby="view-tab-code"
+            aria-hidden={view === "preview"}
+            inert={view === "preview"}
+            className={cn("size-full transition-opacity duration-200", view === "preview" && "invisible opacity-0")}
+          >
           <PanelGroup direction="vertical" autoSaveId="apppilot.ide.v">
             <Panel id="editor" order={1} minSize={20}>
               <EditorArea projectId={projectId} aiModifiedPaths={aiModifiedPaths} readOnly={readOnly} />
@@ -386,6 +425,9 @@ export function IdeScreen({ projectId }: { projectId: string }) {
               </>
             ) : null}
           </PanelGroup>
+          </div>
+          {view === "preview" ? <PreviewWorkspace projectId={projectId} /> : null}
+          </div>
         </Panel>
         {layout.assistant ? (
           <>

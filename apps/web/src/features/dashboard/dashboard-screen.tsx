@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import type { ActivityEvent, AgentTask, Build } from "@apppilot/contracts";
+import type { ActivityEvent, Build } from "@apppilot/contracts";
 import {
-  ArrowRight,
   ArrowUp,
   Bot,
   CheckCircle2,
   FileArchive,
-  FolderKanban,
   FolderPlus,
   Hammer,
   Package,
@@ -22,11 +20,10 @@ import {
 import { PageBody, Meter, SectionTitle } from "@/components/layout/page";
 import { EmptyState, ErrorState, QueryView } from "@/components/states/states";
 import { AgentStatusBadge, BuildStatusBadge } from "@/components/status/status-badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, Skeleton } from "@/components/ui/primitives";
-import { NewProjectCard, PROJECT_CARD_SKELETON, ProjectCard } from "@/features/projects/project-card";
 import { useActivity, useAgentTasks, useBuilds, useProjects, useSession, useUsage } from "@/lib/api/hooks";
 import { cn, formatBytes, formatDuration, formatNumber, formatRelative } from "@/lib/utils";
+import { DiscoveryPanel } from "./discovery-panel";
 
 const ACTIVITY_ICON: Record<ActivityEvent["kind"], LucideIcon> = {
   project_created: FolderPlus,
@@ -56,10 +53,18 @@ function greeting() {
 /* Hero: the prompt is the page.                                       */
 /* ------------------------------------------------------------------ */
 
-function PromptHero({ firstName }: { firstName?: string }) {
+function PromptHero({
+  firstName,
+  text,
+  setText,
+  inputRef: ref,
+}: {
+  firstName?: string;
+  text: string;
+  setText: (text: string) => void;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
   const router = useRouter();
-  const [text, setText] = useState("");
-  const ref = useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
     const q = new URLSearchParams({ method: "prompt" });
@@ -163,125 +168,6 @@ function PromptHero({ firstName }: { firstName?: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stat tiles                                                          */
-/* ------------------------------------------------------------------ */
-
-const STAT_TONE = {
-  primary: "bg-primary-soft text-primary ring-primary/25",
-  ai: "bg-ai-soft text-ai ring-ai/25",
-  success: "bg-success-soft text-success ring-success/25",
-  danger: "bg-destructive-soft text-destructive ring-destructive/25",
-} as const;
-
-function Stat({
-  label,
-  value,
-  loading,
-  error,
-  href,
-  icon: Icon,
-  tone,
-  index,
-}: {
-  label: string;
-  value: React.ReactNode;
-  loading: boolean;
-  error?: boolean;
-  href?: string;
-  icon: LucideIcon;
-  tone: keyof typeof STAT_TONE;
-  index: number;
-}) {
-  const body = (
-    <div className="flex items-center gap-4 p-4">
-      <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl ring-1", STAT_TONE[tone])}>
-        <Icon className="size-5" aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <div className="font-display text-[30px] font-semibold leading-none tabular-nums tracking-tight">
-          {loading ? <Skeleton className="h-7 w-12" /> : error ? <span className="text-sm font-normal text-muted-foreground">Unavailable</span> : value}
-        </div>
-        <p className="mt-1.5 text-[13px] leading-tight text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-  const cls = "block rounded-2xl border border-border bg-card shadow-card transition-all duration-300";
-  const style = { "--i": index } as React.CSSProperties;
-  return href ? (
-    <Link href={href} style={style} className={cn(cls, "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-pop")}>
-      {body}
-    </Link>
-  ) : (
-    <div style={style} className={cls}>
-      {body}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Project gallery                                                     */
-/* ------------------------------------------------------------------ */
-
-function RecentProjects() {
-  const projects = useProjects();
-  const items = [...(projects.data?.items ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3);
-  // Same query as "Agent tasks running" below (shared cache), used for each card's status.
-  const activeTasks = useAgentTasks({ status: "active" });
-  const taskByProject = new Map<string, AgentTask>();
-  for (const t of activeTasks.data ?? []) if (!taskByProject.has(t.projectId)) taskByProject.set(t.projectId, t);
-  return (
-    <section aria-labelledby="recent-projects" className="mt-12">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <h2 id="recent-projects" className="font-display text-[22px] font-semibold tracking-tight">
-            Pick up where you left off
-          </h2>
-          <p className="mt-0.5 text-[14px] text-muted-foreground">Your most recently edited projects.</p>
-        </div>
-        <Link href="/projects" className="group inline-flex shrink-0 items-center gap-1 text-[14px] font-medium text-primary">
-          View all
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-        </Link>
-      </div>
-      {projects.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Loading projects">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className={PROJECT_CARD_SKELETON} />
-          ))}
-        </div>
-      ) : projects.isError ? (
-        <Card>
-          <ErrorState error={projects.error} onRetry={() => projects.refetch()} />
-        </Card>
-      ) : items.length === 0 ? (
-        <Card className="overflow-hidden">
-          <EmptyState
-            icon={<FolderKanban />}
-            title="No projects yet"
-            action={
-              <Button asChild>
-                <Link href="/projects/new">
-                  <Sparkles /> Create your first app
-                </Link>
-              </Button>
-            }
-          >
-            Describe an app above and AppPilot will generate your first Gradle project.
-          </EmptyState>
-        </Card>
-      ) : (
-        <div className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {items.map((p, i) => (
-            <ProjectCard key={p.id} project={p} task={taskByProject.get(p.id)} index={i} />
-          ))}
-          <NewProjectCard index={items.length} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Builds, activity, usage, agents                                     */
 /* ------------------------------------------------------------------ */
 
@@ -312,23 +198,28 @@ export function DashboardScreen() {
   const activity = useActivity();
 
   const names = new Map(projects.data?.items.map((p) => [p.id, p.name]));
-  const finished = builds.data?.filter((b) => b.status === "succeeded" || b.status === "failed") ?? [];
   const firstName = session.data?.user.name.split(" ")[0];
-  const failed = finished.filter((b) => b.status === "failed").length;
-  const suffix = finished.length ? ` (last ${finished.length})` : "";
+
+  // The build prompt lives here so a template in the discovery panel can fill it.
+  const [prompt, setPrompt] = useState("");
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const fillPrompt = (text: string) => {
+    setPrompt(text);
+    requestAnimationFrame(() => {
+      const el = promptRef.current;
+      if (!el) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
 
   return (
     <PageBody className="max-w-[1280px]">
-      <PromptHero firstName={firstName} />
+      <PromptHero firstName={firstName} text={prompt} setText={setPrompt} inputRef={promptRef} />
 
-      <section aria-label="Summary" className="stagger mt-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat index={0} icon={FolderKanban} tone="primary" label="Projects" href="/projects" loading={projects.isPending} error={projects.isError} value={projects.data?.total ?? projects.data?.items.length} />
-        <Stat index={1} icon={Bot} tone="ai" label="Active AI tasks" loading={activeTasks.isPending} error={activeTasks.isError} value={activeTasks.data?.length} />
-        <Stat index={2} icon={CheckCircle2} tone="success" label={`Successful builds${suffix}`} loading={builds.isPending} error={builds.isError} value={finished.filter((b) => b.status === "succeeded").length} />
-        <Stat index={3} icon={XCircle} tone={failed ? "danger" : "primary"} label={`Failed builds${suffix}`} loading={builds.isPending} error={builds.isError} value={failed} />
-      </section>
-
-      <RecentProjects />
+      <DiscoveryPanel templates={IDEAS} onUseTemplate={fillPrompt} />
 
       <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">

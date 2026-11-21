@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/states/states";
 import { Alert, Skeleton } from "@/components/ui/primitives";
 import { useProject } from "@/lib/api/hooks";
 import { cn } from "@/lib/utils";
+import { useRecordProjectView } from "@/stores/recent-projects";
 import { ProjectTechBadges } from "./project-meta";
 
 const TABS = [
@@ -34,6 +35,7 @@ export function ApkAnalysisNotice({ className }: { className?: string }) {
 export function ProjectFrame({ projectId, children }: { projectId: string; children: React.ReactNode }) {
   const project = useProject(projectId);
   const pathname = usePathname();
+  useRecordProjectView(projectId);
 
   return (
     <div>

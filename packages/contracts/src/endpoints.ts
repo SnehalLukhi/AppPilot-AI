@@ -116,6 +116,10 @@ export const ENDPOINTS = {
   "admin.workers": d("GET", "/api/v1/admin/workers", "backend", "Worker pool status"),
   "admin.audit": d("GET", "/api/v1/admin/audit", "backend", "Audit log"),
 
+  // ---------- live preview ----------
+  "preview.start": d("POST", "/api/v1/projects/{projectId}/preview/session", "build-workers", "Start an emulator stream session for the latest build"),
+  "preview.stop": d("DELETE", "/api/v1/projects/{projectId}/preview/session/{sessionId}", "build-workers", "End an emulator stream session (frees the emulator)"),
+
   // ---------- visual editor (optional) ----------
   "ui.screens": d("GET", "/api/v1/projects/{projectId}/ui/screens", "code-generation", "Parsed UI screens"),
   "ui.screen": d("GET", "/api/v1/projects/{projectId}/ui/screens/{screenId}", "code-generation", "Component tree + preview"),

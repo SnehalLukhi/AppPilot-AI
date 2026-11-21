@@ -62,6 +62,7 @@ export const qk = {
   invoices: ["billing", "invoices"] as const,
   admin: (part: string) => ["admin", part] as const,
   uiScreens: (projectId: string) => ["ui", projectId] as const,
+  previewSession: (projectId: string) => ["preview", projectId, "session"] as const,
 };
 
 type QOpts<T> = Omit<UseQueryOptions<T>, "queryKey" | "queryFn">;
@@ -334,8 +335,24 @@ export const useAdminUsers = () => useQuery({ queryKey: qk.admin("users"), query
 export const useAdminWorkers = () => useQuery({ queryKey: qk.admin("workers"), queryFn: api.admin.workers, refetchInterval: 15_000 });
 export const useAdminAudit = () => useQuery({ queryKey: qk.admin("audit"), queryFn: api.admin.audit });
 
-export const useUiScreens = (projectId: string) =>
-  useQuery({ queryKey: qk.uiScreens(projectId), queryFn: () => api.ui.screens(projectId) });
+export const useUiScreens = (projectId: string, opts?: { enabled?: boolean }) =>
+  useQuery({ queryKey: qk.uiScreens(projectId), queryFn: () => api.ui.screens(projectId), enabled: opts?.enabled ?? true });
+
+/**
+ * Starts an emulator stream session while the Preview view is open. Each open
+ * creates a fresh session (gcTime 0), so it is only enabled while visible.
+ */
+export const useEmulatorSession = (projectId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: qk.previewSession(projectId),
+    queryFn: ({ signal }) => api.preview.start(projectId, {}, signal),
+    enabled,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
 /* ---------------- shared ---------------- */
 

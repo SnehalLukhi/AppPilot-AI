@@ -11,6 +11,7 @@ export const SHORTCUTS = [
   { keys: [MOD, "B"], label: "Toggle explorer" },
   { keys: [MOD, "J"], label: "Toggle bottom panel" },
   { keys: [MOD, ALT, "B"], label: "Toggle AI assistant" },
+  { keys: [MOD, ALT, "P"], label: "Switch between Preview and Code" },
   { keys: [MOD, "Shift", "F"], label: "Search in files" },
   { keys: [ALT, "W"], label: "Close tab" },
   { keys: [MOD, "Enter"], label: "Send to assistant" },

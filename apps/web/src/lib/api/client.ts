@@ -37,6 +37,8 @@ import {
   type Paginated,
   type Plan,
   type Project,
+  type EmulatorStreamSession,
+  type StartPreviewSessionRequest,
   type ProjectEnvVar,
   type RedirectUrl,
   type RegisterRequest,
@@ -190,6 +192,11 @@ export const api = {
     users: () => call<Paginated<AdminUser>>("admin.users"),
     workers: () => call<WorkerStatus[]>("admin.workers"),
     audit: () => call<AdminAuditEvent[]>("admin.audit"),
+  },
+  preview: {
+    start: (projectId: string, body: StartPreviewSessionRequest = {}, signal?: AbortSignal) =>
+      call<EmulatorStreamSession>("preview.start", { params: p(projectId), body, signal }),
+    stop: (projectId: string, sessionId: string) => call<void>("preview.stop", { params: { projectId, sessionId } }),
   },
   ui: {
     screens: (projectId: string) => call<UiScreen[]>("ui.screens", { params: p(projectId) }),

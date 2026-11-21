@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
+export type WorkspaceView = "code" | "preview";
 export type BottomTab = "terminal" | "build" | "problems" | "tests" | "git" | "preview";
 
 /** Tabs are file paths, or `review:<changeSetId>` for an agent diff review. */
@@ -27,6 +28,9 @@ interface IdeState {
   tabs: Record<string, ProjectTabs>;
   /** Persisted: panel visibility. Sizes are persisted by react-resizable-panels. */
   layout: { explorer: boolean; assistant: boolean; bottom: boolean; bottomTab: BottomTab };
+  /** Memory only (never persisted): which main view is showing. Always starts on code. */
+  view: WorkspaceView;
+  setView: (view: WorkspaceView) => void;
   /** Memory only: unsaved editor buffers keyed by `${projectId}::${path}`. */
   buffers: Record<string, Buffer>;
   /** Memory only: one-shot request to reveal a position in the editor. */
@@ -65,12 +69,15 @@ export const useIdeStore = create<IdeState>()(
       return {
         tabs: {},
         layout: { explorer: true, assistant: true, bottom: true, bottomTab: "problems" },
+        view: "code",
+        setView: (view) => set({ view }),
         buffers: {},
         reveal: null,
         cursor: null,
         setCursor: (cursor) => set({ cursor }),
 
         openFile: (projectId, path, opts) => {
+          set({ view: "code" });
           patchTabs(projectId, (t) => ({
             openTabs: t.openTabs.includes(path) ? t.openTabs : [...t.openTabs, path],
             active: path,

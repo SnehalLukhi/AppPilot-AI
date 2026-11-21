@@ -96,6 +96,8 @@ Types for each group live in `packages/contracts/src/<group>.ts`. Conventions th
 | `tests.cases` | GET | `/api/v1/tests/{jobId}/cases` | Test cases | draft | yes |
 | `tests.screenshots` | GET | `/api/v1/tests/{jobId}/screenshots` | Emulator screenshots | draft | yes |
 | `tests.logs` | GET | `/api/v1/tests/{jobId}/logs` | Test log text | draft | yes |
+| `preview.start` | POST | `/api/v1/projects/{projectId}/preview/session` | Start an emulator stream session for the latest build | draft | no |
+| `preview.stop` | DELETE | `/api/v1/projects/{projectId}/preview/session/{sessionId}` | End an emulator stream session (frees the emulator) | draft | no |
 
 ## Code-generation engine — confirm owner
 
